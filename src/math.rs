@@ -13,6 +13,7 @@ use std::ops::{
 };
 
 pub type Float = f64;
+pub const PI: Float = std::f64::consts::PI;
 
 pub type Color = Vec3;
 pub type Point3 = Vec3;
@@ -86,12 +87,29 @@ impl Vec3 {
 		self.len() <= 0.0
 	}
 
+	pub fn is_near_zero(self) -> bool {
+		const EPS: Float = 1.0e-8;
+		let abs = self.abs();
+		abs.x < EPS && abs.y < EPS && abs.z < EPS
+	}
+
 	pub fn norm(self) -> Self {
 		self / self.len()
 	}
 
 	pub fn abs(self) -> Self {
 		Self::new(self.x.abs(), self.y.abs(), self.z.abs())
+	}
+
+	pub fn reflect(self, normal: Self) -> Self {
+		self - 2.0 * self.dot(normal) * normal
+	}
+
+	pub fn refract(self, normal: Self, etai_over_etat: Float) -> Self {
+		let cos_theta = ((-1.0) * self).dot(normal).min(1.0);
+		let r_out_perp = etai_over_etat * (self + cos_theta * normal);
+		let r_out_parallel = -(1.0 - r_out_perp.len().powi(2)).abs().sqrt() * normal;
+		r_out_perp + r_out_parallel
 	}
 }
 

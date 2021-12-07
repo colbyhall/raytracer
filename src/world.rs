@@ -1,9 +1,13 @@
-use crate::math::*;
+use crate::{
+	material::MaterialRef,
+	math::*,
+};
 
 pub struct Hit {
 	pub impact: Point3,
 	pub normal: Vec3,
 	pub time: Float,
+	pub material: MaterialRef,
 	pub front_face: bool,
 }
 
@@ -14,11 +18,16 @@ pub trait Hittable {
 pub struct Sphere {
 	pub center: Point3,
 	pub radius: Float,
+	pub material: MaterialRef,
 }
 
 impl Sphere {
-	pub fn new(center: Point3, radius: Float) -> Self {
-		Self { center, radius }
+	pub fn new(center: Point3, radius: Float, material: &MaterialRef) -> Self {
+		Self {
+			center,
+			radius,
+			material: material.clone(),
+		}
 	}
 }
 
@@ -51,6 +60,7 @@ impl Hittable for Sphere {
 			impact,
 			normal,
 			time,
+			material: self.material.clone(),
 			front_face,
 		})
 	}
@@ -71,5 +81,44 @@ impl Hittable for World {
 		}
 
 		result
+	}
+}
+
+pub struct Camera {
+	origin: Point3,
+	horizontal: Vec3,
+	vertical: Vec3,
+	bottom_left: Vec3,
+}
+
+impl Camera {
+	pub fn new(origin: Point3, look_at: Point3, vfov: Float, aspect_ratio: Float) -> Self {
+		// Vertical field-of-view in degrees
+		let theta = PI / 180.0 * vfov;
+		let viewport_height = 2.0 * (theta / 2.0).tan();
+		let viewport_width = aspect_ratio * viewport_height;
+
+		let cw = (origin - look_at).norm();
+		let cu = Vec3::UP.cross(cw).norm();
+		let cv = cw.cross(cu);
+
+		let horizontal = viewport_width * cu;
+		let vertical = viewport_height * cv;
+
+		let bottom_left = origin - horizontal / 2.0 - vertical / 2.0 - cw;
+
+		Self {
+			origin,
+			horizontal,
+			vertical,
+			bottom_left,
+		}
+	}
+
+	pub fn ray_at(&self, u: Float, v: Float) -> Ray {
+		Ray::new(
+			self.origin,
+			self.bottom_left + u * self.horizontal + v * self.vertical - self.origin,
+		)
 	}
 }

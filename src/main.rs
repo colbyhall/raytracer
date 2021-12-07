@@ -1,9 +1,13 @@
 #![feature(const_fn_floating_point_arithmetic)]
 
+use std::rc::Rc;
+
+mod material;
 mod math;
 mod world;
 
 use {
+	material::*,
 	math::*,
 	rand::prelude::*,
 	stb::image_write,
@@ -17,15 +21,17 @@ use {
 };
 
 fn ray_color(ray: &Ray, world: &World, depth: usize) -> Color {
-	if depth <= 0 {
+	if depth == 0 {
 		// If we've exceeded the ray bounce limit, no more light is gathered
 		return Color::new(0.0, 0.0, 0.0);
 	}
 
 	if let Some(hit) = world.hit(ray, 0.001, Float::INFINITY) {
-		let target = hit.impact + hit.normal + Vec3::rand_in_unit_sphere();
-		let ray = Ray::new(hit.impact, target - hit.impact);
-		0.5 * ray_color(&ray, world, depth - 1)
+		if let Some((attenuation, scattered)) = hit.material.bounce(ray, &hit) {
+			attenuation * ray_color(&scattered, world, depth - 1)
+		} else {
+			Color::new(0.0, 0.0, 0.0)
+		}
 	} else {
 		let direction = ray.direction.norm();
 		let t = 0.5 * (direction.z + 1.0);
@@ -36,25 +42,37 @@ fn ray_color(ray: &Ray, world: &World, depth: usize) -> Color {
 fn main() {
 	// Image Information
 	const ASPECT_RATIO: Float = 16.0 / 9.0;
-	const IMAGE_WIDTH: usize = 1280;
+	const IMAGE_WIDTH: usize = 720;
 	const IMAGE_HEIGHT: usize = ((IMAGE_WIDTH as Float) / ASPECT_RATIO) as usize;
 	const SAMPLES_PER_PIXEL: usize = 10;
 	const MAX_DEPTH: usize = 50;
 
-	// Camera Information
-	let viewport_height = 2.0;
-	let viewport_width = viewport_height * ASPECT_RATIO;
-	let focal_length = 1.0;
-
-	let origin = Point3::ZERO;
-	let horizontal = viewport_width * Vec3::RIGHT;
-	let vertical = viewport_height * Vec3::UP;
-	let bottom_left = origin - horizontal / 2.0 - vertical / 2.0 - focal_length * Vec3::FORWARD;
-
 	// World data
 	let mut world = World::new();
-	world.push(Box::new(Sphere::new(Point3::new(-1.0, 0.0, 0.0), 0.5)));
-	world.push(Box::new(Sphere::new(Point3::new(-1.0, 0.0, -100.5), 100.0)));
+	let mat_ground: MaterialRef = Rc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
+	let mat_center: MaterialRef = Rc::new(Lambertian::new(Color::new(0.1, 0.2, 0.5)));
+	let mat_left: MaterialRef = Rc::new(Dielectric::new(1.5));
+	let mat_left_inner: MaterialRef = Rc::new(Dielectric::new(1.5));
+	let mat_right: MaterialRef = Rc::new(Metal::new(Color::new(0.8, 0.6, 0.2), 1.0));
+
+	let sphere_ground = Sphere::new(Point3::new(-1.0, 0.0, -100.5), 100.0, &mat_ground);
+	let sphere_center = Sphere::new(Point3::new(-1.0, 0.0, 0.0), 0.5, &mat_center);
+	let sphere_left = Sphere::new(Point3::new(-1.0, -1.0, 0.0), 0.5, &mat_left);
+	let sphere_left_inner = Sphere::new(Point3::new(-1.0, -1.0, 0.0), -0.4, &mat_left_inner);
+	let sphere_right = Sphere::new(Point3::new(-1.0, 1.0, 0.0), 0.5, &mat_right);
+
+	world.push(Box::new(sphere_ground));
+	world.push(Box::new(sphere_center));
+	world.push(Box::new(sphere_left));
+	world.push(Box::new(sphere_left_inner));
+	world.push(Box::new(sphere_right));
+
+	let camera = Camera::new(
+		Point3::new(1.0, -2.0, 2.0),
+		Point3::new(-1.0, 0.0, 0.0),
+		20.0,
+		ASPECT_RATIO,
+	);
 
 	let mut rng = rand::thread_rng();
 	let mut pixels = vec![0; IMAGE_WIDTH * IMAGE_HEIGHT];
@@ -70,8 +88,7 @@ fn main() {
 				let u = ((x as Float) + random_u) / ((IMAGE_WIDTH - 1) as Float);
 				let v = ((y as Float) + random_v) / ((IMAGE_HEIGHT - 1) as Float);
 
-				let direction = bottom_left + u * horizontal + v * vertical - origin;
-				let ray = Ray::new(origin, direction);
+				let ray = camera.ray_at(u, v);
 				color += ray_color(&ray, &world, MAX_DEPTH);
 			}
 			let color = color / SAMPLES_PER_PIXEL as Float;
