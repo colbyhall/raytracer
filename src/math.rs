@@ -1,3 +1,4 @@
+use rand::prelude::*;
 use std::ops::{
 	Add,
 	AddAssign,
@@ -6,6 +7,7 @@ use std::ops::{
 	Mul,
 	MulAssign,
 	Neg,
+	Range,
 	Sub,
 	SubAssign,
 };
@@ -23,8 +25,8 @@ pub struct Vec3 {
 }
 
 impl Vec3 {
-	pub const ZERO: Self = Self::new(0.0, 0.0, 0.0);
-	pub const ONE: Self = Self::new(1.0, 1.0, 1.0);
+	pub const ZERO: Self = Self::splat(0.0);
+	pub const ONE: Self = Self::splat(1.0);
 
 	pub const FORWARD: Self = Self::new(1.0, 0.0, 0.0);
 	pub const RIGHT: Self = Self::new(0.0, 1.0, 0.0);
@@ -32,6 +34,32 @@ impl Vec3 {
 
 	pub const fn new(x: Float, y: Float, z: Float) -> Self {
 		Self { x, y, z }
+	}
+
+	pub const fn splat(xyz: Float) -> Self {
+		Self {
+			x: xyz,
+			y: xyz,
+			z: xyz,
+		}
+	}
+
+	pub fn rand(range: Range<Float>) -> Self {
+		let mut rng = rand::thread_rng();
+		Self {
+			x: rng.gen_range(range.clone()),
+			y: rng.gen_range(range.clone()),
+			z: rng.gen_range(range),
+		}
+	}
+
+	pub fn rand_in_unit_sphere() -> Self {
+		loop {
+			let v = Vec3::rand(-1.0..1.0);
+			if v.len() < 1.0 {
+				return v;
+			}
+		}
 	}
 
 	pub const fn dot(self, other: Self) -> Float {

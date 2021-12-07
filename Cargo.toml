@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 stb = "0.3.2"
+rand = "*"

@@ -1,9 +1,11 @@
 #![feature(const_fn_floating_point_arithmetic)]
 
 mod math;
+mod world;
 
 use {
 	math::*,
+	rand::prelude::*,
 	stb::image_write,
 	std::{
 		ffi::CString,
@@ -11,32 +13,24 @@ use {
 		slice::from_raw_parts,
 		time::SystemTime,
 	},
+	world::*,
 };
 
-fn hit_sphere(center: Point3, radius: Float, ray: &Ray) -> Float {
-	let oc = ray.origin - center;
-	let a = ray.direction.len_sq();
-	let b = oc.dot(ray.direction);
-	let c = oc.len_sq() - radius * radius;
-	let d = b * b - a * c;
+fn ray_color(ray: &Ray, world: &World, depth: usize) -> Color {
+	if depth <= 0 {
+		// If we've exceeded the ray bounce limit, no more light is gathered
+		return Color::new(0.0, 0.0, 0.0);
+	}
 
-	if d < 0.0 {
-		-1.0
+	if let Some(hit) = world.hit(ray, 0.001, Float::INFINITY) {
+		let target = hit.impact + hit.normal + Vec3::rand_in_unit_sphere();
+		let ray = Ray::new(hit.impact, target - hit.impact);
+		0.5 * ray_color(&ray, world, depth - 1)
 	} else {
-		(-b - d.sqrt()) / (2.0 * a)
+		let direction = ray.direction.norm();
+		let t = 0.5 * (direction.z + 1.0);
+		(1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
 	}
-}
-
-fn ray_color(ray: &Ray) -> Color {
-	let t = hit_sphere(Vec3::FORWARD * -1.0, 0.5, ray);
-	if t > 0.0 {
-		let normal = (ray.at(t) - Vec3::FORWARD * -1.0).norm();
-		return Color::new(normal.x + 1.0, normal.y + 1.0, normal.z + 1.0) * 0.5;
-	}
-
-	let direction = ray.direction.norm();
-	let t = 0.5 * (direction.z + 1.0);
-	(1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
 }
 
 fn main() {
@@ -44,6 +38,8 @@ fn main() {
 	const ASPECT_RATIO: Float = 16.0 / 9.0;
 	const IMAGE_WIDTH: usize = 1280;
 	const IMAGE_HEIGHT: usize = ((IMAGE_WIDTH as Float) / ASPECT_RATIO) as usize;
+	const SAMPLES_PER_PIXEL: usize = 10;
+	const MAX_DEPTH: usize = 50;
 
 	// Camera Information
 	let viewport_height = 2.0;
@@ -55,19 +51,34 @@ fn main() {
 	let vertical = viewport_height * Vec3::UP;
 	let bottom_left = origin - horizontal / 2.0 - vertical / 2.0 - focal_length * Vec3::FORWARD;
 
+	// World data
+	let mut world = World::new();
+	world.push(Box::new(Sphere::new(Point3::new(-1.0, 0.0, 0.0), 0.5)));
+	world.push(Box::new(Sphere::new(Point3::new(-1.0, 0.0, -100.5), 100.0)));
+
+	let mut rng = rand::thread_rng();
 	let mut pixels = vec![0; IMAGE_WIDTH * IMAGE_HEIGHT];
 	for y in 0..IMAGE_HEIGHT {
+		eprintln!("Scanlines remaining: {}", IMAGE_HEIGHT - y - 1);
+
 		for x in 0..IMAGE_WIDTH {
-			let u = (x as Float) / ((IMAGE_WIDTH - 1) as Float);
-			let v = (y as Float) / ((IMAGE_HEIGHT - 1) as Float);
+			let mut color = Color::ZERO;
+			for _ in 0..SAMPLES_PER_PIXEL {
+				let random_u: f64 = rng.gen();
+				let random_v: f64 = rng.gen();
 
-			let direction = bottom_left + u * horizontal + v * vertical - origin;
-			let ray = Ray::new(origin, direction);
-			let color = ray_color(&ray);
+				let u = ((x as Float) + random_u) / ((IMAGE_WIDTH - 1) as Float);
+				let v = ((y as Float) + random_v) / ((IMAGE_HEIGHT - 1) as Float);
 
-			let r = (color.x * 255.0) as u32;
-			let g = (color.y * 255.0) as u32;
-			let b = (color.z * 255.0) as u32;
+				let direction = bottom_left + u * horizontal + v * vertical - origin;
+				let ray = Ray::new(origin, direction);
+				color += ray_color(&ray, &world, MAX_DEPTH);
+			}
+			let color = color / SAMPLES_PER_PIXEL as Float;
+
+			let r = (color.x.sqrt().clamp(0.0, 0.999) * 255.0) as u32;
+			let g = (color.y.sqrt().clamp(0.0, 0.999) * 255.0) as u32;
+			let b = (color.z.sqrt().clamp(0.0, 0.999) * 255.0) as u32;
 			let a = 255;
 			let color = (a << 24) | (b << 16) | (g << 8) | r;
 
@@ -75,6 +86,7 @@ fn main() {
 			pixels[x + y * IMAGE_WIDTH] = color;
 		}
 	}
+	eprintln!("Done.");
 
 	let now = SystemTime::now()
 		.duration_since(SystemTime::UNIX_EPOCH)
