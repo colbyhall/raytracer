@@ -1,0 +1,11 @@
+{
+    "filewatcher.commands": [
+        {
+            "match": "\\.rs*",
+            "isAsync": true,
+            "cmd": "rustfmt ${file}",
+            "event": "onFileChange"
+        }
+    ],
+    "cmake.configureOnOpen": false
+}

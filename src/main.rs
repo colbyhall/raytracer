@@ -1,4 +1,9 @@
+#![feature(const_fn_floating_point_arithmetic)]
+
+mod math;
+
 use {
+	math::*,
 	stb::image_write,
 	std::{
 		ffi::CString,
@@ -8,28 +13,60 @@ use {
 	},
 };
 
+fn hit_sphere(center: Point3, radius: Float, ray: &Ray) -> bool {
+	let oc = ray.origin - center;
+	let a = ray.direction.len_sq();
+	let b = 2.0 * oc.dot(ray.direction);
+	let c = oc.len_sq() - radius * radius;
+	let d = b * b - 4.0 * a * c;
+	d > 0.0
+}
+
+fn ray_color(ray: &Ray) -> Color {
+	if hit_sphere(Vec3::FORWARD * 1.0, 0.1, ray) {
+		return Color::new(1.0, 0.0, 0.0);
+	}
+
+	let direction = ray.direction.norm();
+	let t = 0.5 * (direction.z + 1.0);
+	(1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
+}
+
 fn main() {
-	const WIDTH: usize = 256;
-	const HEIGHT: usize = 256;
+	// Image Information
+	const ASPECT_RATIO: Float = 16.0 / 9.0;
+	const IMAGE_WIDTH: usize = 256;
+	#[allow(clippy::unnecessary_cast)]
+	const IMAGE_HEIGHT: usize = ((256 as Float) / ASPECT_RATIO) as usize;
 
-	let mut pixels = vec![0; WIDTH * HEIGHT];
+	// Camera Information
+	let viewport_height = 2.0;
+	let viewport_width = viewport_height * ASPECT_RATIO;
+	let focal_length = 1.0;
 
-	for y in 0..HEIGHT {
-		for x in 0..WIDTH {
-			let r = (x as f64) / ((WIDTH - 1) as f64);
-			let g = (y as f64) / ((HEIGHT - 1) as f64);
-			let b = 0.25;
+	let origin = Point3::ZERO;
+	let horizontal = viewport_width * Vec3::RIGHT;
+	let vertical = viewport_height * Vec3::UP;
+	let bottom_left = origin - horizontal / 2.0 - vertical / 2.0 - focal_length * Vec3::FORWARD;
 
+	let mut pixels = vec![0; IMAGE_WIDTH * IMAGE_HEIGHT];
+	for y in 0..IMAGE_HEIGHT {
+		for x in 0..IMAGE_WIDTH {
+			let u = (x as Float) / ((IMAGE_WIDTH - 1) as Float);
+			let v = (y as Float) / ((IMAGE_HEIGHT - 1) as Float);
 
+			let direction = bottom_left + u * horizontal + v * vertical - origin;
+			let ray = Ray::new(origin, direction);
+			let color = ray_color(&ray);
 
-			let r = (r * 255.0) as u32;
-			let g = (g * 255.0) as u32;
-			let b = (b * 255.0) as u32;
+			let r = (color.x * 255.0) as u32;
+			let g = (color.y * 255.0) as u32;
+			let b = (color.z * 255.0) as u32;
 			let a = 255;
 			let color = (a << 24) | (b << 16) | (g << 8) | r;
 
-			let y = (WIDTH - 1) - y;
-			pixels[x + y * WIDTH] = color;
+			let y = (IMAGE_HEIGHT - 1) - y;
+			pixels[x + y * IMAGE_WIDTH] = color;
 		}
 	}
 
@@ -47,10 +84,10 @@ fn main() {
 	};
 	image_write::stbi_write_png(
 		&path,
-		WIDTH as i32,
-		HEIGHT as i32,
+		IMAGE_WIDTH as i32,
+		IMAGE_HEIGHT as i32,
 		size_of::<u32>() as i32,
 		pixels,
-		(WIDTH * size_of::<u32>()) as i32,
+		(IMAGE_WIDTH * size_of::<u32>()) as i32,
 	);
 }
