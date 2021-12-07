@@ -16,14 +16,14 @@ use {
 fn hit_sphere(center: Point3, radius: Float, ray: &Ray) -> bool {
 	let oc = ray.origin - center;
 	let a = ray.direction.len_sq();
-	let b = 2.0 * oc.dot(ray.direction);
+	let b = oc.dot(ray.direction);
 	let c = oc.len_sq() - radius * radius;
-	let d = b * b - 4.0 * a * c;
+	let d = b * b - a * c;
 	d > 0.0
 }
 
 fn ray_color(ray: &Ray) -> Color {
-	if hit_sphere(Vec3::FORWARD * 1.0, 0.1, ray) {
+	if hit_sphere(Vec3::FORWARD * -1.0, 0.5, ray) {
 		return Color::new(1.0, 0.0, 0.0);
 	}
 
@@ -35,9 +35,8 @@ fn ray_color(ray: &Ray) -> Color {
 fn main() {
 	// Image Information
 	const ASPECT_RATIO: Float = 16.0 / 9.0;
-	const IMAGE_WIDTH: usize = 256;
-	#[allow(clippy::unnecessary_cast)]
-	const IMAGE_HEIGHT: usize = ((256 as Float) / ASPECT_RATIO) as usize;
+	const IMAGE_WIDTH: usize = 1280;
+	const IMAGE_HEIGHT: usize = ((IMAGE_WIDTH as Float) / ASPECT_RATIO) as usize;
 
 	// Camera Information
 	let viewport_height = 2.0;
