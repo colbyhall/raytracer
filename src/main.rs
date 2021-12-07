@@ -20,12 +20,15 @@ fn main() {
 			let g = (y as f64) / ((HEIGHT - 1) as f64);
 			let b = 0.25;
 
+
+
 			let r = (r * 255.0) as u32;
 			let g = (g * 255.0) as u32;
 			let b = (b * 255.0) as u32;
 			let a = 255;
-
 			let color = (a << 24) | (b << 16) | (g << 8) | r;
+
+			let y = (WIDTH - 1) - y;
 			pixels[x + y * WIDTH] = color;
 		}
 	}
