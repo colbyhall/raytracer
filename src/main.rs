@@ -13,18 +13,25 @@ use {
 	},
 };
 
-fn hit_sphere(center: Point3, radius: Float, ray: &Ray) -> bool {
+fn hit_sphere(center: Point3, radius: Float, ray: &Ray) -> Float {
 	let oc = ray.origin - center;
 	let a = ray.direction.len_sq();
 	let b = oc.dot(ray.direction);
 	let c = oc.len_sq() - radius * radius;
 	let d = b * b - a * c;
-	d > 0.0
+
+	if d < 0.0 {
+		-1.0
+	} else {
+		(-b - d.sqrt()) / (2.0 * a)
+	}
 }
 
 fn ray_color(ray: &Ray) -> Color {
-	if hit_sphere(Vec3::FORWARD * -1.0, 0.5, ray) {
-		return Color::new(1.0, 0.0, 0.0);
+	let t = hit_sphere(Vec3::FORWARD * -1.0, 0.5, ray);
+	if t > 0.0 {
+		let normal = (ray.at(t) - Vec3::FORWARD * -1.0).norm();
+		return Color::new(normal.x + 1.0, normal.y + 1.0, normal.z + 1.0) * 0.5;
 	}
 
 	let direction = ray.direction.norm();
